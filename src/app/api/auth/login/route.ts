@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import { createClient } from '@insforge/sdk'
 import { createInsForgeServerClient, setAuthCookies } from '@/lib/insforge-server'
 
 const LoginSchema = z.object({
@@ -74,13 +75,17 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Crear cliente en modo servidor
-    const insforge = createInsForgeServerClient()
+    // Crear cliente NORMAL (no servidor) para OAuth
+    // El SDK maneja PKCE y cookies automáticamente según la skill de InsForge
+    const insforge = createClient({
+      baseUrl: process.env.NEXT_PUBLIC_INSFORGE_BASE_URL || 'https://base.monetizao.com',
+      anonKey: process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY || '',
+    })
 
-    // Iniciar OAuth con InsForge
+    // Iniciar OAuth - el SDK maneja todo y redirige al dashboard automáticamente
     const { data, error } = await insforge.auth.signInWithOAuth({
       provider,
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/auth/callback`,
+      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard`,
     })
 
     if (error || !data?.url) {
@@ -90,7 +95,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Redirigir al proveedor OAuth
+    // Redirigir al proveedor OAuth (Google/GitHub)
     return NextResponse.redirect(data.url)
   } catch (error) {
     console.error('OAuth error:', error)
