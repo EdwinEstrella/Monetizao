@@ -346,7 +346,7 @@ export default function CalculadoraROIServiciosIAPage() {
             <CardContent className="space-y-3">
               <div className="p-3 bg-blue-50 rounded-lg">
                 <h4 className="font-medium text-sm mb-1">💡 ROI Ideal</h4>
-                <p className="text-xs text-muted-foreground">Busca un ROI > 100% en 12 meses</p>
+                <p className="text-xs text-muted-foreground">Busca un ROI {'>'} 100% en 12 meses</p>
               </div>
               <div className="p-3 bg-green-50 rounded-lg">
                 <h4 className="font-medium text-sm mb-1">⏱️ Break-even</h4>

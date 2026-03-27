@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@insforge/sdk'
 import { useToast } from '@/hooks/use-toast'
@@ -63,8 +63,15 @@ export function useAuth(): AuthState & AuthActions {
     anonKey: process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY || '',
   }), [])
 
+  // Flag para evitar múltiples inicializaciones
+  const isInitialized = useRef(false)
+
   // Verificar si estamos en un callback de OAuth
   useEffect(() => {
+    // Evitar múltiples inicializaciones
+    if (isInitialized.current) return
+    isInitialized.current = true
+
     const urlParams = new URLSearchParams(window.location.search)
     const hasOauthCode = urlParams.has('insforge_code') ||
                         urlParams.has('code') ||
@@ -156,7 +163,8 @@ export function useAuth(): AuthState & AuthActions {
 
       waitForOauthProcessing()
     }
-  }, [insforge])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Sin dependencias para que solo se ejecute una vez
 
   // Iniciar sesión con email y contraseña
   const signIn = useCallback(async (email: string, password: string) => {

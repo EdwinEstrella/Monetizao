@@ -157,10 +157,15 @@ export default function AuthPage() {
     }
   }
 
-  // Redirigir si ya está autenticado
+  // Redirigir si ya está autenticado (con delay para evitar loop infinito)
   useEffect(() => {
     if (auth.isAuthenticated && !auth.isLoading) {
-      router.push('/dashboard')
+      // Agregar pequeño delay para evitar race conditions
+      const timeoutId = setTimeout(() => {
+        router.push('/dashboard')
+      }, 100)
+
+      return () => clearTimeout(timeoutId)
     }
   }, [auth.isAuthenticated, auth.isLoading, router])
 

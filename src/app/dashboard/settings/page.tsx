@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -47,15 +47,19 @@ export default function SettingsPage() {
   const { toast } = useToast()
   const router = useRouter()
 
-  useEffect(() => {
-    fetchUserData()
-  }, [])
-
-  const fetchUserData = async () => {
+  // Wrap fetchUserData in useCallback to prevent infinite loops
+  const fetchUserData = useCallback(async () => {
     try {
       const response = await fetch('/api/auth/me')
       if (response.ok) {
         const data = await response.json()
+
+        // Verificar que data.user existe antes de usarlo
+        if (!data.user) {
+          router.push('/auth')
+          return
+        }
+
         setUser(data.user)
 
         // Cargar configuración de API existente y proveedores soportados
@@ -78,7 +82,12 @@ export default function SettingsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [router])
+
+  useEffect(() => {
+    fetchUserData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Solo ejecutar una vez al montar
 
   const currentProvider = supportedProviders.find(p => p.value === apiConfig.provider)
 

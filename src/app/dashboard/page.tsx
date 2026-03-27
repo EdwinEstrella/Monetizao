@@ -119,7 +119,8 @@ export default function DashboardPage() {
 
         // Verificar que data.user existe antes de acceder a sus propiedades
         if (!data.user) {
-          router.push('/auth')
+          // NO redirigir automáticamente - evitar loop infinito
+          setUser(null)
           return
         }
 
@@ -139,11 +140,16 @@ export default function DashboardPage() {
           totalSaved: 0,
         })
       } else {
-        router.push('/auth')
+        // Solo redirigir si es un error 401 explícito
+        if (response.status === 401) {
+          router.push('/auth')
+        } else {
+          setUser(null)
+        }
       }
     } catch (error) {
       console.error('Error fetching user data:', error)
-      router.push('/auth')
+      setUser(null)
     } finally {
       setLoading(false)
     }
@@ -154,7 +160,8 @@ export default function DashboardPage() {
     // InsForge backend already exchanged the OAuth code and set cookies
     // Just verify authentication and fetch user data
     fetchUserData()
-  }, [fetchUserData])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Solo ejecutar una vez al montar, no re-ejecutar cuando fetchUserData cambie
 
   const handleLogout = useCallback(async () => {
     try {

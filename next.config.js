@@ -1,14 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    mdxRs: false,
-  },
-
-  // Deshabilitar ESLint en build temporalmente
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-
   // Deshabilitar TypeScript en build temporalmente
   typescript: {
     ignoreBuildErrors: true,
@@ -28,9 +19,8 @@ const nextConfig = {
   },
   pageExtensions: ['js', 'jsx', 'mdx', 'ts', 'tsx'],
 
-  // Compresión y optimización básica
+  // Compresión básica (swcMinify es true por defecto en Next.js 16)
   compress: true,
-  swcMinify: true,
 };
 
 module.exports = nextConfig;

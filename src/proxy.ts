@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { SecurityMiddleware } from '@/lib/security/middleware'
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   // Ignorar archivos estáticos y recursos
   if (
     request.nextUrl.pathname.startsWith('/_next') ||
@@ -107,7 +107,7 @@ export async function middleware(request: NextRequest) {
   return NextResponse.next()
 }
 
-export const config = {
+export const proxyConfig = {
   matcher: [
     /*
      * Match all request paths except for the ones starting with:

@@ -68,9 +68,6 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
         <link rel="dns-prefetch" href="https://pagead2.googlesyndication.com" />
-
-        {/* Preload critical CSS */}
-        <link rel="preload" href="/_next/static/css/app/layout.css" as="style" />
       </head>
       {/* Optimize AdSense loading with defer and proper strategy */}
       <Script

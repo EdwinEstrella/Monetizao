@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
-import { createInsForgeServerClient, getAuthCookies, refreshSession } from '@/lib/insforge-server'
+import { createInsForgeServerClient, getAuthCookies } from '@/lib/insforge-server'
 
 export async function GET() {
   try {
     // Obtener tokens de cookies
-    const { accessToken, refreshToken } = await getAuthCookies()
+    const { accessToken } = await getAuthCookies()
 
     if (!accessToken) {
       // Retornar 200 con user null en lugar de 401 para evitar errores en consola
@@ -17,35 +17,20 @@ export async function GET() {
     // Crear cliente con el token
     const insforge = createInsForgeServerClient(accessToken)
 
-    // Intentar obtener usuario actual
-    let userData, userError
-    try {
-      const result = await insforge.auth.getCurrentUser()
-      userData = result.data
-      userError = result.error
-    } catch (error) {
-      userError = error
-    }
+    // Intentar obtener usuario actual SIN intentar refrescar automáticamente
+    // El refresh solo debería ocurrir explícitamente cuando el cliente lo solicita
+    const { data, error } = await insforge.auth.getCurrentUser()
 
-    // Si el token expiró y tenemos refresh token, intentar refrescar
-    if (userError && refreshToken) {
-      const refreshData = await refreshSession()
-
-      if (refreshData?.user) {
-        userData = { user: refreshData.user }
-        userError = null
-      }
-    }
-
-    if (userError || !userData?.user) {
-      // Retornar 200 con user null en lugar de 401 para evitar errores en consola
+    if (error || !data?.user) {
+      // Retornar 200 con user null en lugar de 401
+      // NO intentar refrescar aquí para evitar loops
       return NextResponse.json({
         success: false,
         user: null
       })
     }
 
-    const user = userData.user
+    const user = data.user
 
     // Intentar obtener perfil completo del usuario (puede no existir)
     let profileData = null
