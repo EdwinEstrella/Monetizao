@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "insforge": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@insforge/mcp@latest"
+      ],
+      "env": {
+        "API_KEY": "ik_r86ofyukjh6r8oufykvh486drticvgujbp97tilui5dytkcgh6sruyc",
+        "API_BASE_URL": "https://base.monetizao.com"
+      }
+    }
+  }
+}

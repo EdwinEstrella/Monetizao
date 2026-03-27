@@ -1,0 +1,378 @@
+generator client {
+  provider      = "prisma-client"
+  output        = "../src/generated/prisma"
+  binaryTargets = ["native", "linux-arm64-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Tablas existentes de la base de datos
+model analytics_daily {
+  id                   Int       @id @default(autoincrement())
+  date                 DateTime  @unique @db.Date
+  page_views           Int?      @default(0)
+  unique_visitors      Int?      @default(0)
+  bounce_rate          Decimal?  @default(0) @db.Decimal(5, 2)
+  avg_session_duration Int?      @default(0)
+  article_views        Int?      @default(0)
+  new_comments         Int?      @default(0)
+  new_ratings          Int?      @default(0)
+  created_at           DateTime? @default(now()) @db.Timestamp(6)
+  updated_at           DateTime? @default(now()) @db.Timestamp(6)
+
+  @@index([date], map: "idx_analytics_daily_date")
+  @@map("analytics_daily")
+}
+
+model article_tags {
+  article_id String   @db.Uuid
+  tag_id     String   @db.Uuid
+  articles   articles @relation(fields: [article_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tags       tags     @relation(fields: [tag_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([article_id, tag_id])
+  @@map("article_tags")
+}
+
+model articles {
+  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title           String         @db.VarChar(255)
+  slug            String         @unique @db.VarChar(255)
+  excerpt         String?
+  content         String
+  featured_image  String?        @db.VarChar(255)
+  status          String         @default("draft") @db.VarChar(50)
+  published_at    DateTime?      @db.Timestamp(6)
+  author_id       String         @db.Uuid
+  category_id     String         @db.Uuid
+  seo_title       String?        @db.VarChar(255)
+  seo_description String?
+  seo_keywords    String?        @db.VarChar(255)
+  view_count      Int?           @default(0)
+  language        String         @default("es") @db.VarChar(10)
+  translations    Json?
+  created_at      DateTime?      @default(now()) @db.Timestamp(6)
+  updated_at      DateTime?      @default(now()) @db.Timestamp(6)
+  article_tags    article_tags[]
+  users           users          @relation(fields: [author_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  categories      categories     @relation(fields: [category_id], references: [id], onUpdate: NoAction)
+  comments        comments[]
+  ratings         ratings[]
+
+  @@index([author_id], map: "idx_articles_author_id")
+  @@index([category_id], map: "idx_articles_category_id")
+  @@index([language], map: "idx_articles_language")
+  @@index([published_at], map: "idx_articles_published_at")
+  @@index([slug], map: "idx_articles_slug")
+  @@index([status], map: "idx_articles_status")
+  @@index([view_count(sort: Desc)], map: "idx_articles_view_count")
+  @@map("articles")
+}
+
+model categories {
+  id               String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name             String       @db.VarChar(255)
+  slug             String       @unique @db.VarChar(255)
+  description      String?
+  parent_id        String?      @db.Uuid
+  language         String       @default("es") @db.VarChar(10)
+  translations     Json?
+  created_at       DateTime?    @default(now()) @db.Timestamp(6)
+  updated_at       DateTime?    @default(now()) @db.Timestamp(6)
+  articles         articles[]
+  categories       categories?  @relation("categoriesTocategories", fields: [parent_id], references: [id], onUpdate: NoAction)
+  other_categories categories[] @relation("categoriesTocategories")
+
+  @@index([language], map: "idx_categories_language")
+  @@index([parent_id], map: "idx_categories_parent_id")
+  @@index([slug], map: "idx_categories_slug")
+  @@map("categories")
+}
+
+model comments {
+  id         String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name       String     @db.VarChar(255)
+  email      String     @db.VarChar(255)
+  website    String?    @db.VarChar(255)
+  content    String
+  article_id String     @db.Uuid
+  parent_id  String?    @db.Uuid
+  status     String     @default("pending") @db.VarChar(50)
+  ip_address String     @db.Inet
+  user_agent String?
+  created_at DateTime?  @default(now()) @db.Timestamp(6)
+  updated_at DateTime?  @default(now()) @db.Timestamp(6)
+  articles   articles   @relation(fields: [article_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  comments   comments?  @relation("commentsTocomments", fields: [parent_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  other_comments comments[] @relation("commentsTocomments")
+
+  @@index([article_id], map: "idx_comments_article_id")
+  @@index([created_at], map: "idx_comments_created_at")
+  @@index([parent_id], map: "idx_comments_parent_id")
+  @@index([status], map: "idx_comments_status")
+  @@map("comments")
+}
+
+model page_views {
+  id         Int       @id @default(autoincrement())
+  ip_address String    @db.VarChar(45)
+  user_agent String?
+  url        String    @db.VarChar(2048)
+  method     String    @db.VarChar(10)
+  referer    String?   @db.VarChar(2048)
+  article_id String?   @db.VarChar(255)
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+
+  @@index([article_id], map: "idx_page_views_article_id")
+  @@index([created_at], map: "idx_page_views_created_at")
+  @@index([ip_address], map: "idx_page_views_ip_address")
+  @@map("page_views")
+}
+
+model ratings {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  article_id String    @db.Uuid
+  value      Int
+  ip_address String    @db.Inet
+  user_agent String?
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  updated_at DateTime? @default(now()) @db.Timestamp(6)
+  articles   articles  @relation(fields: [article_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([article_id, ip_address])
+  @@index([article_id], map: "idx_ratings_article_id")
+  @@index([value], map: "idx_ratings_value")
+  @@map("ratings")
+}
+
+model sessions {
+  id         Int       @id @default(autoincrement())
+  session_id String    @unique @db.VarChar(255)
+  ip_address String    @db.VarChar(45)
+  user_agent String?
+  start_time DateTime? @default(now()) @db.Timestamp(6)
+  end_time   DateTime? @db.Timestamp(6)
+  duration   Int?
+  page_views Int?      @default(0)
+  is_bounce  Boolean?  @default(false)
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+
+  @@index([ip_address], map: "idx_sessions_ip_address")
+  @@index([session_id], map: "idx_sessions_session_id")
+  @@index([start_time], map: "idx_sessions_start_time")
+  @@map("sessions")
+}
+
+model tags {
+  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String         @db.VarChar(255)
+  slug         String         @unique @db.VarChar(255)
+  color        String?        @db.VarChar(7)
+  language     String         @default("es") @db.VarChar(10)
+  translations Json?
+  created_at   DateTime?      @default(now()) @db.Timestamp(6)
+  updated_at   DateTime?      @default(now()) @db.Timestamp(6)
+  article_tags article_tags[]
+
+  @@index([language], map: "idx_tags_language")
+  @@index([slug], map: "idx_tags_slug")
+  @@map("tags")
+}
+
+model user_interactions {
+  id         Int       @id @default(autoincrement())
+  ip_address String    @db.VarChar(45)
+  user_agent String?
+  event_type String    @db.VarChar(100)
+  entity_id  String?   @db.VarChar(255)
+  metadata   Json?
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+
+  @@index([created_at], map: "idx_user_interactions_created_at")
+  @@index([entity_id], map: "idx_user_interactions_entity_id")
+  @@index([event_type], map: "idx_user_interactions_event_type")
+  @@map("user_interactions")
+}
+
+// Modelo User extendido para autenticación y herramientas
+model users {
+  id               String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name             String     @db.VarChar(255)
+  email            String     @unique @db.VarChar(255)
+  password         String     @db.VarChar(255)
+  role             String     @default("user") @db.VarChar(50)
+  avatar           String?    @db.VarChar(255)
+  bio              String?
+  token_version    Int?       @default(0)
+  refresh_token    String?    @db.VarChar(255)
+  last_login       DateTime?  @db.Timestamp(6)
+  is_active        Boolean?   @default(true)
+  is_verified      Boolean    @default(false)
+  emailVerifiedAt  DateTime?  @map("email_verified_at") @db.Timestamp(6)
+  dailyUsageCount  Int        @default(0) @map("daily_usage_count")
+  lastUsageDate    DateTime?  @map("last_usage_date") @db.Timestamp(6)
+  created_at       DateTime?  @default(now()) @db.Timestamp(6)
+  updated_at       DateTime?  @default(now()) @db.Timestamp(6)
+  articles         articles[]
+  apiConfigs       api_configs[]
+  subscriptions    subscriptions[]
+  toolUsages       tool_usages[]
+  toolRatings      tool_ratings[]
+  devices          devices[]
+  userUsage        user_usage?
+
+  @@index([email], map: "idx_users_email")
+  @@index([is_active], map: "idx_users_is_active")
+  @@index([role], map: "idx_users_role")
+  @@index([is_verified], map: "idx_users_is_verified")
+  @@map("users")
+}
+
+// Nuevas tablas para herramientas de monetización
+model api_configs {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @unique @map("user_id") @db.Uuid
+  provider    String   @db.VarChar(50) // openai, deepseek, gemini
+  apiKey      String   @map("api_key") @db.VarChar(500)
+  modelName   String?  @map("model_name") @db.VarChar(100)
+  isActive    Boolean  @default(true) @map("is_active")
+  maxTokens   Int      @default(4000) @map("max_tokens")
+  temperature Float    @default(0.7)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+  user        users    @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([provider], map: "idx_api_configs_provider")
+  @@index([isActive], map: "idx_api_configs_is_active")
+  @@map("api_configs")
+}
+
+model subscriptions {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  planType    String   @map("plan_type") @db.VarChar(50)
+  status      String   @db.VarChar(50)
+  startDate   DateTime @map("start_date") @db.Timestamp(6)
+  endDate     DateTime @map("end_date") @db.Timestamp(6)
+  cancelAtEnd Boolean  @default(false) @map("cancel_at_end")
+  toolsUsed   Json     @map("tools_used")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+  user        users    @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userId], map: "idx_subscriptions_user_id")
+  @@index([status], map: "idx_subscriptions_status")
+  @@index([endDate], map: "idx_subscriptions_end_date")
+  @@map("subscriptions")
+}
+
+model tools {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String   @db.VarChar(255)
+  slug        String   @unique @db.VarChar(255)
+  description String
+  category    String   @db.VarChar(100)
+  isPremium   Boolean  @default(false)
+  icon        String   @db.VarChar(100)
+  rating      Decimal  @default(4.5) @db.Decimal(3, 1)
+  usersCount  Int      @default(0) @map("users_count")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+  usages      tool_usages[]
+  ratings     tool_ratings[]
+
+  @@index([category], map: "idx_tools_category")
+  @@index([isPremium], map: "idx_tools_is_premium")
+  @@index([isActive], map: "idx_tools_is_active")
+  @@map("tools")
+}
+
+model tool_usages {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  toolId     String   @map("tool_id") @db.Uuid
+  userId     String?  @map("user_id") @db.Uuid
+  ipAddress  String   @map("ip_address") @db.VarChar(45)
+  userAgent  String?  @map("user_agent")
+  input      Json
+  output     Json
+  success    Boolean  @default(true)
+  duration   Int      @default(0) // en milisegundos
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  tool       tools    @relation(fields: [toolId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user       users?   @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([toolId], map: "idx_tool_usages_tool_id")
+  @@index([userId], map: "idx_tool_usages_user_id")
+  @@index([createdAt], map: "idx_tool_usages_created_at")
+  @@map("tool_usages")
+}
+
+model tool_ratings {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  toolId     String   @map("tool_id") @db.Uuid
+  userId     String?  @map("user_id") @db.Uuid
+  rating     Int
+  comment    String?
+  ipAddress  String   @map("ip_address") @db.VarChar(45)
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+  tool       tools    @relation(fields: [toolId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user       users?   @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@unique([toolId, userId, ipAddress])
+  @@index([toolId], map: "idx_tool_ratings_tool_id")
+  @@index([userId], map: "idx_tool_ratings_user_id")
+  @@map("tool_ratings")
+}
+
+model devices {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String?   @db.Uuid @map("user_id")
+  fingerprint      String    @db.VarChar(255) @map("device_fingerprint")
+  userAgent        String    @db.Text @map("user_agent")
+  ip               String    @db.VarChar(45)
+  platform         String?   @db.VarChar(100)
+  browser          String?   @db.VarChar(100)
+  browserVersion   String?   @db.VarChar(50)
+  os               String?   @db.VarChar(100)
+  osVersion        String?   @db.VarChar(50)
+  screenResolution String?   @db.VarChar(20) @map("screen_resolution")
+  colorDepth       Int?      @map("color_depth")
+  timezone         String?   @db.VarChar(100)
+  language         String?   @db.VarChar(10)
+  hardwareConcurrency Int?  @map("hardware_concurrency")
+  deviceMemory     Float?    @map("device_memory")
+  isActive         Boolean   @default(true) @map("is_active")
+  lastSeen         DateTime  @default(now()) @map("last_seen") @db.Timestamp(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user users? @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([fingerprint])
+  @@index([userId], map: "idx_devices_user_id")
+  @@index([ip], map: "idx_devices_ip")
+  @@index([isActive], map: "idx_devices_is_active")
+  @@index([lastSeen], map: "idx_devices_last_seen")
+  @@map("devices")
+}
+
+model user_usage {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String   @unique @map("user_id") @db.Uuid
+  weeklyCount  Int      @default(0) @map("weekly_count")
+  monthlyCount Int      @default(0) @map("monthly_count")
+  resetAt      DateTime @map("reset_at") @db.Timestamp(6)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+  user         users    @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userId], map: "idx_user_usage_user_id")
+  @@index([resetAt], map: "idx_user_usage_reset_at")
+  @@map("user_usage")
+}
