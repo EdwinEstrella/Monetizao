@@ -76,13 +76,18 @@ export async function GET(request: NextRequest) {
     }
 
     // Crear cliente NORMAL (no servidor) para OAuth
-    // El SDK maneja PKCE y cookies automáticamente según la skill de InsForge
+    // El SDK maneja PKCE, cookies y redirecciones automáticamente
     const insforge = createClient({
       baseUrl: process.env.NEXT_PUBLIC_INSFORGE_BASE_URL || 'https://base.monetizao.com',
       anonKey: process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY || '',
     })
 
-    // Iniciar OAuth - el SDK maneja todo y redirige al dashboard automáticamente
+    // Iniciar OAuth - el SDK maneja todo automáticamente
+    // 1. Redirige al proveedor (Google/GitHub)
+    // 2. El proveedor redirige de vuelta con el código
+    // 3. El SDK intercambia el código por tokens
+    // 4. El SDK guarda las cookies httpOnly
+    // 5. Redirige a la URL final
     const { data, error } = await insforge.auth.signInWithOAuth({
       provider,
       redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard`,

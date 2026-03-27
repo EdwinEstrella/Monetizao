@@ -164,6 +164,16 @@ export default function AuthPage() {
   // Redirigir si ya está autenticado y verificar errores de OAuth
   useEffect(() => {
     const checkAuth = async () => {
+      // NO verificar autenticación si estamos en un callback de OAuth
+      // Esto evita llamar a /api/auth/me antes de procesar el código OAuth
+      const urlParams = new URLSearchParams(window.location.search)
+      const hasOAuthParams = urlParams.has('insforge_code') || urlParams.has('oauth_error')
+
+      if (hasOAuthParams) {
+        // Dejar que el dashboard maneje el callback OAuth
+        return
+      }
+
       try {
         const response = await fetch('/api/auth/me')
         if (response.ok) {

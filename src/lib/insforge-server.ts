@@ -24,12 +24,47 @@ export function createInsForgeServerClient(accessToken?: string) {
 }
 
 /**
- * Obtener tokens de las cookies
+ * Obtener tokens de las cookies - intenta múltiples nombres posibles
  */
 export async function getAuthCookies() {
   const cookieStore = await cookies()
-  const accessToken = cookieStore.get(accessCookie)?.value
-  const refreshToken = cookieStore.get(refreshCookie)?.value
+
+  // El SDK normal puede usar diferentes nombres de cookies
+  const possibleNames = [
+    'insforge_access_token',
+    'access_token',
+    'auth-token',
+    'token'
+  ]
+
+  const possibleRefreshNames = [
+    'insforge_refresh_token',
+    'refresh_token',
+    'refresh-token'
+  ]
+
+  let accessToken = null
+  let refreshToken = null
+
+  // Buscar access token
+  for (const name of possibleNames) {
+    const cookie = cookieStore.get(name)
+    if (cookie?.value) {
+      accessToken = cookie.value
+      console.log(`Found access token cookie: ${name}`)
+      break
+    }
+  }
+
+  // Buscar refresh token
+  for (const name of possibleRefreshNames) {
+    const cookie = cookieStore.get(name)
+    if (cookie?.value) {
+      refreshToken = cookie.value
+      console.log(`Found refresh token cookie: ${name}`)
+      break
+    }
+  }
 
   return { accessToken, refreshToken }
 }
@@ -62,8 +97,20 @@ export async function setAuthCookies(accessToken: string, refreshToken?: string)
  */
 export async function clearAuthCookies() {
   const cookieStore = await cookies()
-  cookieStore.delete(accessCookie)
-  cookieStore.delete(refreshCookie)
+
+  // Eliminar todos los posibles nombres de cookies
+  const allCookieNames = [
+    'insforge_access_token',
+    'insforge_refresh_token',
+    'access_token',
+    'refresh_token',
+    'auth-token',
+    'token'
+  ]
+
+  for (const name of allCookieNames) {
+    cookieStore.delete(name)
+  }
 }
 
 /**

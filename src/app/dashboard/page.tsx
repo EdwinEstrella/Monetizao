@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -30,6 +30,74 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/hooks/use-toast'
 
+// Hoist static data outside component to prevent recreation on every render
+const TOOLS = [
+  {
+    name: 'Generador de Prompts',
+    slug: 'generador-prompts-lucrativos',
+    icon: Zap,
+    category: 'Generación',
+    isPremium: false,
+    color: 'bg-blue-500',
+  },
+  {
+    name: 'Calculadora ROI',
+    slug: 'calculadora-roi-servicios-ia',
+    icon: BarChart3,
+    category: 'Analytics',
+    isPremium: false,
+    color: 'bg-green-500',
+  },
+  {
+    name: 'Generador Propuestas',
+    slug: 'generador-propuestas-comerciales',
+    icon: FileText,
+    category: 'Negocio',
+    isPremium: false,
+    color: 'bg-purple-500',
+  },
+  {
+    name: 'Template Nichos',
+    slug: 'template-generator-nichos',
+    icon: Target,
+    category: 'Plantillas',
+    isPremium: false,
+    color: 'bg-orange-500',
+  },
+  {
+    name: 'Analizador Competencia',
+    slug: 'analizador-competencia-ia',
+    icon: Target,
+    category: 'Análisis',
+    isPremium: true,
+    color: 'bg-red-500',
+  },
+  {
+    name: 'Optimizador Contenido',
+    slug: 'optimizador-contenido-ia',
+    icon: Globe,
+    category: 'Optimización',
+    isPremium: true,
+    color: 'bg-indigo-500',
+  },
+  {
+    name: 'Dashboard Métricas',
+    slug: 'dashboard-metricas-monetizacion',
+    icon: BarChart3,
+    category: 'Dashboard',
+    isPremium: true,
+    color: 'bg-cyan-500',
+  },
+  {
+    name: 'Detector Tendencias',
+    slug: 'detector-tendencias-ia',
+    icon: TrendingUp,
+    category: 'Tendencias',
+    isPremium: true,
+    color: 'bg-pink-500',
+  },
+] as const
+
 export default function DashboardPage() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -42,11 +110,8 @@ export default function DashboardPage() {
   const { toast } = useToast()
   const router = useRouter()
 
-  useEffect(() => {
-    fetchUserData()
-  }, [])
-
-  const fetchUserData = async () => {
+  // Use useCallback to prevent recreation on every render
+  const fetchUserData = useCallback(async () => {
     try {
       const response = await fetch('/api/auth/me')
       if (response.ok) {
@@ -63,8 +128,8 @@ export default function DashboardPage() {
         setUsageStats({
           dailyUsage,
           maxDaily: data.user.hasActiveSubscription ? 999 : 5,
-          monthlyUsage: data.user.dailyUsageCount * 30, // Estimado
-          totalSaved: 0, // TODO: Calcular desde la base de datos
+          monthlyUsage: data.user.dailyUsageCount * 30,
+          totalSaved: 0,
         })
       } else {
         router.push('/auth')
@@ -75,9 +140,16 @@ export default function DashboardPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [router])
 
-  const handleLogout = async () => {
+  // Initialize dashboard - InsForge handles OAuth automatically on backend
+  useEffect(() => {
+    // InsForge backend already exchanged the OAuth code and set cookies
+    // Just verify authentication and fetch user data
+    fetchUserData()
+  }, [fetchUserData])
+
+  const handleLogout = useCallback(async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' })
       router.push('/auth')
@@ -88,74 +160,12 @@ export default function DashboardPage() {
     } catch (error) {
       console.error('Error logging out:', error)
     }
-  }
+  }, [router, toast])
 
-  const tools = [
-    {
-      name: 'Generador de Prompts',
-      slug: 'generador-prompts-lucrativos',
-      icon: Zap,
-      category: 'Generación',
-      isPremium: false,
-      color: 'bg-blue-500',
-    },
-    {
-      name: 'Calculadora ROI',
-      slug: 'calculadora-roi-servicios-ia',
-      icon: BarChart3,
-      category: 'Analytics',
-      isPremium: false,
-      color: 'bg-green-500',
-    },
-    {
-      name: 'Generador Propuestas',
-      slug: 'generador-propuestas-comerciales',
-      icon: FileText,
-      category: 'Negocio',
-      isPremium: false,
-      color: 'bg-purple-500',
-    },
-    {
-      name: 'Template Nichos',
-      slug: 'template-generator-nichos',
-      icon: Target,
-      category: 'Plantillas',
-      isPremium: false,
-      color: 'bg-orange-500',
-    },
-    {
-      name: 'Analizador Competencia',
-      slug: 'analizador-competencia-ia',
-      icon: Target,
-      category: 'Análisis',
-      isPremium: true,
-      color: 'bg-red-500',
-    },
-    {
-      name: 'Optimizador Contenido',
-      slug: 'optimizador-contenido-ia',
-      icon: Globe,
-      category: 'Optimización',
-      isPremium: true,
-      color: 'bg-indigo-500',
-    },
-    {
-      name: 'Dashboard Métricas',
-      slug: 'dashboard-metricas-monetizacion',
-      icon: BarChart3,
-      category: 'Dashboard',
-      isPremium: true,
-      color: 'bg-cyan-500',
-    },
-    {
-      name: 'Detector Tendencias',
-      slug: 'detector-tendencias-ia',
-      icon: TrendingUp,
-      category: 'Tendencias',
-      isPremium: true,
-      color: 'bg-pink-500',
-    },
-  ]
+  // Memoize expensive calculations
+  const usagePercentage = useMemo(() => {
+    return (usageStats.dailyUsage / usageStats.maxDaily) * 100
+  }, [usageStats.dailyUsage, usageStats.maxDaily])
 
   if (loading) {
     return (
@@ -169,10 +179,8 @@ export default function DashboardPage() {
   }
 
   if (!user) {
-    return null // Redirigirá a /auth
+    return null
   }
-
-  const usagePercentage = (usageStats.dailyUsage / usageStats.maxDaily) * 100
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -312,7 +320,7 @@ export default function DashboardPage() {
             </TabsList>
 
             <TabsContent value="all" className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {tools.map((tool) => {
+              {TOOLS.map((tool) => {
                 const isLocked = tool.isPremium && !user.hasActiveSubscription
                 const isDailyLimitReached = !user.hasActiveSubscription && usageStats.dailyUsage >= usageStats.maxDaily && !tool.isPremium
 
@@ -370,7 +378,7 @@ export default function DashboardPage() {
             </TabsContent>
 
             <TabsContent value="free" className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
-              {tools.filter(tool => !tool.isPremium).map((tool) => {
+              {TOOLS.filter(tool => !tool.isPremium).map((tool) => {
                 const isDailyLimitReached = !user.hasActiveSubscription && usageStats.dailyUsage >= usageStats.maxDaily
 
                 return (
@@ -416,7 +424,7 @@ export default function DashboardPage() {
             </TabsContent>
 
             <TabsContent value="premium" className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
-              {tools.filter(tool => tool.isPremium).map((tool) => {
+              {TOOLS.filter(tool => tool.isPremium).map((tool) => {
                 const isLocked = !user.hasActiveSubscription
 
                 return (
