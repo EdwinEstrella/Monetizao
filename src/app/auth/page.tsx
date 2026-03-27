@@ -21,6 +21,7 @@ import { useRouter } from 'next/navigation'
 export default function AuthPage() {
   const router = useRouter()
   const auth = useAuth()
+  const [isRedirecting, setIsRedirecting] = useState(false)
 
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
@@ -159,15 +160,16 @@ export default function AuthPage() {
 
   // Redirigir si ya está autenticado (con delay para evitar loop infinito)
   useEffect(() => {
-    if (auth.isAuthenticated && !auth.isLoading) {
-      // Agregar pequeño delay para evitar race conditions
+    if (auth.isAuthenticated && !auth.isLoading && !isRedirecting) {
+      setIsRedirecting(true)
+      // Agregar delay más largo para evitar race conditions
       const timeoutId = setTimeout(() => {
         router.push('/dashboard')
-      }, 100)
+      }, 500)
 
       return () => clearTimeout(timeoutId)
     }
-  }, [auth.isAuthenticated, auth.isLoading, router])
+  }, [auth.isAuthenticated, auth.isLoading, router, isRedirecting])
 
   // Mostrar loader mientras carga el estado de autenticación
   if (auth.isLoading) {

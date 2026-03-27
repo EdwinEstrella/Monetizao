@@ -29,6 +29,7 @@ import {
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/hooks/use-toast'
+import { createClient } from '@insforge/sdk'
 
 // Hoist static data outside component to prevent recreation on every render
 const TOOLS = [
@@ -155,13 +156,69 @@ export default function DashboardPage() {
     }
   }, [router])
 
-  // Initialize dashboard - InsForge handles OAuth automatically on backend
+  // Initialize dashboard - Check for OAuth callback first
   useEffect(() => {
-    // InsForge backend already exchanged the OAuth code and set cookies
-    // Just verify authentication and fetch user data
-    fetchUserData()
+    const initializeDashboard = async () => {
+      // Verificar si hay un código OAuth en la URL
+      const urlParams = new URLSearchParams(window.location.search)
+      const oauthCode = urlParams.get('insforge_code')
+
+      if (oauthCode) {
+        // El SDK de InsForge detecta automáticamente el código OAuth y lo procesa
+        // Solo necesitamos esperar a que termine y limpiar la URL
+        const insforge = createClient({
+          baseUrl: process.env.NEXT_PUBLIC_INSFORGE_BASE_URL || 'https://base.monetizao.com',
+          anonKey: process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY || '',
+        })
+
+        try {
+          // Esperar a que el SDK procese el OAuth
+          await new Promise(resolve => setTimeout(resolve, 500))
+
+          // Obtener el usuario (el SDK ya procesó el OAuth)
+          const { data, error } = await insforge.auth.getCurrentUser()
+
+          if (!error && data?.user) {
+            // Limpiar la URL
+            window.history.replaceState({}, '', window.location.pathname)
+
+            toast({
+              title: "¡Autenticación exitosa!",
+              description: "Has iniciado sesión con OAuth correctamente",
+            })
+
+            // Actualizar el usuario localmente
+            setUser(data.user)
+            setLoading(false)
+            return
+          } else {
+            toast({
+              title: "Error en OAuth",
+              description: error?.message || 'Error al procesar OAuth',
+              variant: "destructive"
+            })
+            router.push('/auth')
+            return
+          }
+        } catch (err) {
+          console.error('OAuth processing error:', err)
+          toast({
+            title: "Error en OAuth",
+            description: 'Error de conexión',
+            variant: "destructive"
+          })
+          router.push('/auth')
+          return
+        }
+      }
+
+      // Obtener datos del usuario normalmente
+      fetchUserData()
+    }
+
+    initializeDashboard()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // Solo ejecutar una vez al montar, no re-ejecutar cuando fetchUserData cambie
+  }, []) // Solo ejecutar una vez al montar
 
   const handleLogout = useCallback(async () => {
     try {
@@ -193,7 +250,20 @@ export default function DashboardPage() {
   }
 
   if (!user) {
-    return null
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <h1 className="text-2xl font-bold text-gray-900">No autenticado</h1>
+          <p className="text-gray-600">Debes iniciar sesión para ver el dashboard</p>
+          <button
+            onClick={() => router.push('/auth')}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Ir al Login
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (

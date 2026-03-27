@@ -1,14 +1,31 @@
 /**
- * Hook de autenticación optimizado según mejores prácticas de InsForge
- * Proporciona gestión de estado, auto-refresh y manejo de errores
+ * Hook de autenticación - Patrón SSR Correcto
+ *
+ * En el patrón SSR:
+ * - NO creamos el SDK cliente para operaciones de auth
+ * - Todas las operaciones de auth usan Server Actions
+ * - El SDK cliente solo se usa para getCurrentUser() (lectura)
+ * - Los tokens se manejan en cookies httpOnly en el servidor
+ * - El SDK detecta automáticamente los callbacks de OAuth
  */
 
 'use client'
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@insforge/sdk'
 import { useToast } from '@/hooks/use-toast'
+import {
+  signInAction,
+  signUpAction,
+  signInWithOAuthAction,
+  signOutAction,
+  getCurrentUserAction,
+  verifyEmailAction,
+  resendVerificationEmailAction,
+  sendResetPasswordEmailAction,
+  resetPasswordAction,
+  updateProfileAction,
+} from '@/app/auth/actions'
 
 interface User {
   id: string
@@ -58,136 +75,58 @@ export function useAuth(): AuthState & AuthActions {
     isAuthenticated: false
   })
 
-  const insforge = useMemo(() => createClient({
-    baseUrl: process.env.NEXT_PUBLIC_INSFORGE_BASE_URL || 'https://base.monetizao.com',
-    anonKey: process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY || '',
-  }), [])
-
-  // Flag para evitar múltiples inicializaciones
-  const isInitialized = useRef(false)
-
-  // Verificar si estamos en un callback de OAuth
+  // Inicializar: verificar si hay sesión usando Server Action
+  // Esto evita crear el SDK cliente durante el render
   useEffect(() => {
-    // Evitar múltiples inicializaciones
-    if (isInitialized.current) return
-    isInitialized.current = true
+    const initializeAuth = async () => {
+      try {
+        // Verificar si el SDK de InsForge detectó un código OAuth en la URL
+        // Si lo detectó, ya procesó el callback y guardó la sesión
+        const urlParams = new URLSearchParams(window.location.search)
+        const hasOauthCode = urlParams.has('insforge_code') || urlParams.has('code')
 
-    const urlParams = new URLSearchParams(window.location.search)
-    const hasOauthCode = urlParams.has('insforge_code') ||
-                        urlParams.has('code') ||
-                        window.location.href.includes('insforge_code')
-
-    // Si hay código OAuth, el SDK lo procesará automáticamente
-    // Solo inicializamos si NO es un callback
-    if (!hasOauthCode) {
-      const initializeAuth = async () => {
-        try {
-          // Pequeño delay para evitar race conditions con OAuth
+        if (hasOauthCode) {
+          // El SDK ya procesó el OAuth, esperar un momento y limpiar URL
           await new Promise(resolve => setTimeout(resolve, 100))
 
-          const { data, error } = await insforge.auth.getCurrentUser()
-
-          if (error) {
-            // Silenciosamente marcar como no autenticado sin errores en consola
-            setState({
-              user: null,
-              isLoading: false,
-              error: null,
-              isAuthenticated: false
-            })
-          } else if (data?.user) {
-            setState({
-              user: data.user,
-              isLoading: false,
-              error: null,
-              isAuthenticated: true
-            })
-          } else {
-            setState({
-              user: null,
-              isLoading: false,
-              error: null,
-              isAuthenticated: false
-            })
-          }
-        } catch (err) {
-          // Silenciosamente marcar como no autenticado
-          setState({
-            user: null,
-            isLoading: false,
-            error: null,
-            isAuthenticated: false
-          })
+          // Limpiar la URL
+          const cleanUrl = window.location.pathname
+          window.history.replaceState({}, '', cleanUrl)
         }
+
+        // Obtener usuario actual usando server action
+        // Esto verifica las cookies httpOnly en el servidor
+        const user = await getCurrentUserAction()
+
+        setState({
+          user,
+          isLoading: false,
+          error: null,
+          isAuthenticated: user !== null
+        })
+      } catch (err) {
+        console.error('Error initializing auth:', err)
+        setState({
+          user: null,
+          isLoading: false,
+          error: null,
+          isAuthenticated: false
+        })
       }
-
-      initializeAuth()
-    } else {
-      // Si es callback OAuth, esperar a que el SDK lo procese
-      // El SDK detectará automáticamente insforge_code y guardará la sesión
-      const waitForOauthProcessing = async () => {
-        try {
-          // Esperar a que el SDK procese el código OAuth
-          await new Promise(resolve => setTimeout(resolve, 500))
-
-          // Después del OAuth, intentar obtener el usuario
-          const { data, error } = await insforge.auth.getCurrentUser()
-
-          if (data?.user) {
-            setState({
-              user: data.user,
-              isLoading: false,
-              error: null,
-              isAuthenticated: true
-            })
-
-            // Limpiar la URL para quitar los parámetros de OAuth
-            window.history.replaceState({}, '', window.location.pathname)
-          } else {
-            setState({
-              user: null,
-              isLoading: false,
-              error: error?.message || 'Error en OAuth',
-              isAuthenticated: false
-            })
-          }
-        } catch (err) {
-          setState({
-            user: null,
-            isLoading: false,
-            error: 'Error procesando OAuth',
-            isAuthenticated: false
-          })
-        }
-      }
-
-      waitForOauthProcessing()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // Sin dependencias para que solo se ejecute una vez
 
-  // Iniciar sesión con email y contraseña
+    initializeAuth()
+  }, [])
+
+  // Iniciar sesión - Usa Server Action
   const signIn = useCallback(async (email: string, password: string) => {
     setState(prev => ({ ...prev, isLoading: true, error: null }))
 
-    try {
-      const { data, error } = await insforge.auth.signInWithPassword({
-        email,
-        password,
-      })
+    const result = await signInAction(email, password)
 
-      if (error || !data?.user) {
-        const errorMessage = error?.message || 'Error al iniciar sesión'
-        setState(prev => ({
-          ...prev,
-          isLoading: false,
-          error: errorMessage
-        }))
-        return { success: false, error: errorMessage }
-      }
-
+    if (result.success) {
       setState({
-        user: data.user,
+        user: result.user,
         isLoading: false,
         error: null,
         isAuthenticated: true
@@ -199,41 +138,24 @@ export function useAuth(): AuthState & AuthActions {
       })
 
       return { success: true }
-    } catch (err) {
-      const errorMessage = 'Error de conexión. Inténtalo de nuevo.'
+    } else {
       setState(prev => ({
         ...prev,
         isLoading: false,
-        error: errorMessage
+        error: result.error
       }))
-      return { success: false, error: errorMessage }
+      return { success: false, error: result.error }
     }
-  }, [insforge, toast])
+  }, [toast])
 
-  // Registrarse con email y contraseña
+  // Registrarse - Usa Server Action
   const signUp = useCallback(async (email: string, password: string, name?: string) => {
     setState(prev => ({ ...prev, isLoading: true, error: null }))
 
-    try {
-      const { data, error } = await insforge.auth.signUp({
-        email,
-        password,
-        name,
-        redirectTo: `${window.location.origin}/auth`,
-      })
+    const result = await signUpAction(email, password, name)
 
-      if (error) {
-        const errorMessage = error.message || 'Error al registrarse'
-        setState(prev => ({
-          ...prev,
-          isLoading: false,
-          error: errorMessage
-        }))
-        return { success: false, error: errorMessage }
-      }
-
-      // Manejar verificación de email
-      if (data?.requireEmailVerification) {
+    if (result.success) {
+      if (result.requireEmailVerification) {
         setState(prev => ({ ...prev, isLoading: false }))
         toast({
           title: "Cuenta creada",
@@ -245,10 +167,9 @@ export function useAuth(): AuthState & AuthActions {
         }
       }
 
-      // Si no requiere verificación, el usuario ya está autenticado
-      if (data?.user && data?.accessToken) {
+      if (result.user) {
         setState({
-          user: data.user,
+          user: result.user,
           isLoading: false,
           error: null,
           isAuthenticated: true
@@ -261,113 +182,75 @@ export function useAuth(): AuthState & AuthActions {
 
         return { success: true }
       }
-
-      return { success: false, error: 'Error desconocido' }
-    } catch (err) {
-      const errorMessage = 'Error de conexión. Inténtalo de nuevo.'
-      setState(prev => ({
-        ...prev,
-        isLoading: false,
-        error: errorMessage
-      }))
-      return { success: false, error: errorMessage }
     }
-  }, [insforge, toast])
 
-  // Iniciar sesión con OAuth (Google/GitHub)
+    setState(prev => ({
+      ...prev,
+      isLoading: false,
+      error: result.error
+    }))
+
+    return { success: false, error: result.error }
+  }, [toast])
+
+  // Iniciar OAuth - Usa Server Action
   const signInWithOAuth = useCallback(async (provider: 'google' | 'github') => {
     setState(prev => ({ ...prev, isLoading: true }))
 
-    try {
-      const { data, error } = await insforge.auth.signInWithOAuth({
-        provider,
-        redirectTo: `${window.location.origin}/dashboard`,
-      })
+    const result = await signInWithOAuthAction(provider)
 
-      if (error || !data?.url) {
-        setState(prev => ({
-          ...prev,
-          isLoading: false,
-          error: 'Error al iniciar OAuth'
-        }))
-        return
-      }
-
+    if (result.success && result.url) {
       // Redirigir al proveedor OAuth
-      window.location.href = data.url
-    } catch (err) {
+      window.location.href = result.url
+    } else {
       setState(prev => ({
         ...prev,
         isLoading: false,
-        error: 'Error de conexión'
+        error: result.error
       }))
     }
-  }, [insforge])
+  }, [])
 
-  // Cerrar sesión
+  // Cerrar sesión - Usa Server Action
   const signOut = useCallback(async () => {
     setState(prev => ({ ...prev, isLoading: true }))
 
-    try {
-      const { error } = await insforge.auth.signOut()
+    await signOutAction()
 
-      if (error) {
-        console.error('Sign out error:', error)
-      }
+    setState({
+      user: null,
+      isLoading: false,
+      error: null,
+      isAuthenticated: false
+    })
 
-      setState({
-        user: null,
-        isLoading: false,
-        error: null,
-        isAuthenticated: false
-      })
+    toast({
+      title: "Sesión cerrada",
+      description: "Has cerrado sesión correctamente",
+    })
 
-      toast({
-        title: "Sesión cerrada",
-        description: "Has cerrado sesión correctamente",
-      })
+    router.push('/auth')
+  }, [router, toast])
 
-      router.push('/auth')
-    } catch (err) {
-      console.error('Sign out error:', err)
-      // Even if there's an error, clear local state
-      setState({
-        user: null,
-        isLoading: false,
-        error: null,
-        isAuthenticated: false
-      })
-      router.push('/auth')
-    }
-  }, [insforge, router, toast])
-
-  // Refrescar datos del usuario
+  // Refrescar datos del usuario - Usa Server Action
   const refreshUser = useCallback(async () => {
-    try {
-      const { data, error } = await insforge.auth.getCurrentUser()
+    const user = await getCurrentUserAction()
 
-      if (!error && data?.user) {
-        setState({
-          user: data.user,
-          isLoading: false,
-          error: null,
-          isAuthenticated: true
-        })
-      }
-    } catch (err) {
-      console.error('Error refreshing user:', err)
+    if (user) {
+      setState({
+        user,
+        isLoading: false,
+        error: null,
+        isAuthenticated: true
+      })
     }
-  }, [insforge])
+  }, [])
 
-  // Actualizar perfil de usuario
+  // Actualizar perfil - Usa Server Action
   const updateProfile = useCallback(async (profile: Record<string, any>) => {
-    try {
-      const { data, error } = await insforge.auth.setProfile(profile)
+    const result = await updateProfileAction(profile)
 
-      if (error) {
-        return { success: false, error: error.message }
-      }
-
+    if (result.success) {
       // Refrescar datos del usuario
       await refreshUser()
 
@@ -375,58 +258,20 @@ export function useAuth(): AuthState & AuthActions {
         title: "Perfil actualizado",
         description: "Tu perfil ha sido actualizado correctamente",
       })
-
-      return { success: true }
-    } catch (err) {
-      return { success: false, error: 'Error al actualizar perfil' }
     }
-  }, [insforge, refreshUser, toast])
 
-  // Reenviar email de verificación
-  const resendVerificationEmail = useCallback(async (email: string) => {
-    try {
-      const { data, error } = await insforge.auth.resendVerificationEmail({
-        email,
-        redirectTo: `${window.location.origin}/auth`,
-      })
+    return result
+  }, [refreshUser, toast])
 
-      if (error) {
-        return { success: false, error: error.message }
-      }
-
-      toast({
-        title: "Email enviado",
-        description: "Revisa tu bandeja de entrada para el código de verificación",
-      })
-
-      return { success: true }
-    } catch (err) {
-      return { success: false, error: 'Error al enviar email de verificación' }
-    }
-  }, [insforge, toast])
-
-  // Verificar email con código
+  // Verificar email - Usa Server Action
   const verifyEmail = useCallback(async (email: string, otp: string) => {
     setState(prev => ({ ...prev, isLoading: true }))
 
-    try {
-      const { data, error } = await insforge.auth.verifyEmail({
-        email,
-        otp,
-      })
+    const result = await verifyEmailAction(email, otp)
 
-      if (error || !data?.accessToken) {
-        const errorMessage = error?.message || 'Código inválido'
-        setState(prev => ({
-          ...prev,
-          isLoading: false,
-          error: errorMessage
-        }))
-        return { success: false, error: errorMessage }
-      }
-
+    if (result.success) {
       setState({
-        user: data.user,
+        user: result.user,
         isLoading: false,
         error: null,
         isAuthenticated: true
@@ -438,77 +283,60 @@ export function useAuth(): AuthState & AuthActions {
       })
 
       return { success: true }
-    } catch (err) {
-      const errorMessage = 'Error de conexión'
+    } else {
       setState(prev => ({
         ...prev,
         isLoading: false,
-        error: errorMessage
+        error: result.error
       }))
-      return { success: false, error: errorMessage }
+      return { success: false, error: result.error }
     }
-  }, [insforge, toast])
+  }, [toast])
 
-  // Enviar email de reset de contraseña
-  const sendResetPasswordEmail = useCallback(async (email: string) => {
-    try {
-      const { data, error } = await insforge.auth.sendResetPasswordEmail({
-        email,
-        redirectTo: `${window.location.origin}/auth/reset-password`,
+  // Reenviar email de verificación - Usa Server Action
+  const resendVerificationEmail = useCallback(async (email: string) => {
+    const result = await resendVerificationEmailAction(email)
+
+    if (result.success) {
+      toast({
+        title: "Email enviado",
+        description: "Revisa tu bandeja de entrada para el código de verificación",
       })
+    }
 
-      if (error) {
-        return { success: false, error: error.message }
-      }
+    return result
+  }, [toast])
 
+  // Enviar email de reset de contraseña - Usa Server Action
+  const sendResetPasswordEmail = useCallback(async (email: string) => {
+    const result = await sendResetPasswordEmailAction(email)
+
+    if (result.success) {
       toast({
         title: "Email enviado",
         description: "Revisa tu bandeja de entrada para restablecer tu contraseña",
       })
-
-      return { success: true }
-    } catch (err) {
-      return { success: false, error: 'Error al enviar email de restablecimiento' }
     }
+
+    return result
   }, [toast])
 
-  // Restablecer contraseña
+  // Restablecer contraseña - Usa Server Action
   const resetPassword = useCallback(async (newPassword: string, otp: string) => {
     setState(prev => ({ ...prev, isLoading: true }))
 
-    try {
-      const { data, error } = await insforge.auth.resetPassword({
-        newPassword,
-        otp,
-      })
+    const result = await resetPasswordAction(newPassword, otp)
 
-      if (error) {
-        const errorMessage = error.message || 'Error al restablecer contraseña'
-        setState(prev => ({
-          ...prev,
-          isLoading: false,
-          error: errorMessage
-        }))
-        return { success: false, error: errorMessage }
-      }
+    setState(prev => ({ ...prev, isLoading: false }))
 
-      setState(prev => ({ ...prev, isLoading: false }))
-
+    if (result.success) {
       toast({
         title: "Contraseña restablecida",
         description: "Tu contraseña ha sido restablecida correctamente",
       })
-
-      return { success: true }
-    } catch (err) {
-      const errorMessage = 'Error de conexión'
-      setState(prev => ({
-        ...prev,
-        isLoading: false,
-        error: errorMessage
-      }))
-      return { success: false, error: errorMessage }
     }
+
+    return result
   }, [toast])
 
   return {
