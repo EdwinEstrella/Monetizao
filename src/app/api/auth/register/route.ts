@@ -57,34 +57,41 @@ export async function POST(request: NextRequest) {
     // Crear cliente en modo servidor
     const insforge = createInsForgeServerClient()
 
-    // Registrar usuario con InsForge
+    // Registrar usuario con InsForge según documentación
     const { data, error } = await insforge.auth.signUp({
       email,
       password,
       name,
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/auth/login`,
+      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/auth`,
     })
 
     if (error) {
+      // Usar manejo estructurado de errores de InsForge
+      const authError = handleAuthError(error)
+
       // Verificar si es error de usuario ya existe
-      if (error.message?.includes('already') || error.error === 'USER_EXISTS') {
+      if (authError.code === 'USER_EXISTS' || authError.message?.includes('already exists')) {
         return NextResponse.json(
           { error: 'El correo electrónico ya está registrado' },
           { status: 400 }
         )
       }
+
       return NextResponse.json(
-        { error: error.message || 'Error al registrar usuario' },
-        { status: 400 }
+        {
+          error: authError.message || 'Error al registrar usuario',
+          code: authError.code,
+        },
+        { status: authError.statusCode || 400 }
       )
     }
 
-    // Si se requiere verificación de email
+    // Si requiere verificación de email
     if (data?.requireEmailVerification) {
       return NextResponse.json({
         success: true,
-        message: 'Usuario registrado. Por favor verifica tu email.',
-        requireVerification: true,
+        requireEmailVerification: true,
+        message: 'Usuario registrado. Por favor verifica tu email para continuar.',
       })
     }
 
