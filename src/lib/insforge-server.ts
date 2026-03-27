@@ -91,6 +91,8 @@ export async function refreshSession() {
   if (!refreshToken) return null
 
   const insforge = createInsForgeServerClient()
+
+  // Intentar refrescar usando refresh token
   const { data, error } = await insforge.auth.refreshSession({ refreshToken })
 
   if (error || !data?.accessToken) return null

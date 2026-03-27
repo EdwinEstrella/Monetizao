@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createInsForgeServerClient, setAuthCookies } from '@/lib/insforge-server'
+import { createClient } from '@insforge/sdk'
+import { setAuthCookies } from '@/lib/insforge-server'
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,60 +11,78 @@ export async function GET(request: NextRequest) {
     const errorDescription = searchParams.get('error_description')
 
     if (error) {
-      // Redirigir a la página de login con el error
+      console.error('OAuth error from provider:', error, errorDescription)
       const loginUrl = new URL('/auth', request.url)
       loginUrl.searchParams.set('oauth_error', error)
       loginUrl.searchParams.set('error_description', errorDescription || 'Error en autenticación OAuth')
       return NextResponse.redirect(loginUrl)
     }
 
-    // Crear cliente en modo servidor para verificar la sesión OAuth
-    const insforge = createInsForgeServerClient()
+    // El código de OAuth viene en el parámetro 'insforge_code'
+    const code = searchParams.get('insforge_code')
 
-    // Verificar si se estableció la sesión después del OAuth
+    if (!code) {
+      console.error('Missing OAuth code')
+      const loginUrl = new URL('/auth', request.url)
+      loginUrl.searchParams.set('oauth_error', 'missing_code')
+      loginUrl.searchParams.set('error_description', 'Código OAuth no proporcionado')
+      return NextResponse.redirect(loginUrl)
+    }
+
+    console.log('OAuth callback received code:', code.substring(0, 10) + '...')
+
+    // IMPORTANTE: Para el callback de OAuth, usamos el cliente NORMAL (no servidor)
+    // porque el SDK necesita manejar cookies automáticamente para el intercambio OAuth
+    const insforge = createClient({
+      baseUrl: process.env.NEXT_PUBLIC_INSFORGE_BASE_URL || 'https://base.monetizao.com',
+      anonKey: process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY || '',
+      // NO usar isServerMode para OAuth callback
+    })
+
+    console.log('Attempting getCurrentUser with normal client...')
+
+    // Intentar obtener usuario después del OAuth
     const { data: userData, error: userError } = await insforge.auth.getCurrentUser()
 
-    if (userError || !userData?.user) {
+    console.log('getCurrentUser result:', {
+      hasData: !!userData,
+      hasUser: !!userData?.user,
+      hasToken: !!userData?.accessToken,
+      hasRefreshToken: !!userData?.refreshToken,
+      error: userError?.message
+    })
+
+    if (userError) {
+      console.error('getCurrentUser failed:', userError)
       const loginUrl = new URL('/auth', request.url)
       loginUrl.searchParams.set('oauth_error', 'session_failed')
-      loginUrl.searchParams.set('error_description', 'No se pudo establecer la sesión')
+      loginUrl.searchParams.set('error_description', userError.message || 'No se pudo establecer la sesión')
+      return NextResponse.redirect(loginUrl)
+    }
+
+    if (!userData?.user) {
+      console.error('No user in getCurrentUser response')
+      const loginUrl = new URL('/auth', request.url)
+      loginUrl.searchParams.set('oauth_error', 'no_user')
+      loginUrl.searchParams.set('error_description', 'No se pudo obtener el usuario')
       return NextResponse.redirect(loginUrl)
     }
 
     const user = userData.user
+    console.log('✅ User authenticated:', user.email, 'ID:', user.id)
 
-    // Guardar tokens en cookies httpOnly
-    // InsForge maneja automáticamente el intercambio del código OAuth
-    // y devuelve los tokens en la respuesta de getCurrentUser después del callback
+    // Guardar tokens en cookies httpOnly manualmente
     if (userData.accessToken) {
+      console.log('Setting auth cookies...')
       await setAuthCookies(userData.accessToken, userData.refreshToken)
-    }
-
-    // Crear configuración de API por defecto si no existe
-    try {
-      const { data: apiConfig } = await insforge.database
-        .from('api_configs')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle()
-
-      if (!apiConfig) {
-        await insforge.database.from('api_configs').insert([{
-          user_id: user.id,
-          provider: 'deepseek',
-          api_key: 'sk-d9da8c580ae540e2b398bcdb97f69224',
-          model_name: 'deepseek-chat',
-          is_active: true,
-          max_tokens: 4000,
-          temperature: 0.7,
-        }])
-      }
-    } catch (error) {
-      console.log('Error creating default API config:', error)
+    } else {
+      console.error('⚠️ No accessToken in response')
     }
 
     // Redirigir al dashboard
+    console.log('Redirecting to dashboard...')
     return NextResponse.redirect(new URL('/dashboard', request.url))
+
   } catch (error) {
     console.error('OAuth callback error:', error)
 
