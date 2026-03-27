@@ -19,16 +19,16 @@ export async function GET(request: NextRequest) {
 
     // El SDK de InsForge maneja automáticamente el intercambio del código OAuth
     // Solo necesitamos verificar si se estableció la sesión
-    const { data: sessionData, error: sessionError } = await insforge.auth.getCurrentSession()
+    const { data: userData, error: userError } = await insforge.auth.getCurrentUser()
 
-    if (sessionError || !sessionData?.session) {
+    if (userError || !userData?.user) {
       const loginUrl = new URL('/auth', request.url)
       loginUrl.searchParams.set('oauth_error', 'session_failed')
       loginUrl.searchParams.set('error_description', 'No se pudo establecer la sesión')
       return NextResponse.redirect(loginUrl)
     }
 
-    const user = sessionData.session.user
+    const user = userData.user
 
     // Crear configuración de API por defecto si no existe
     try {

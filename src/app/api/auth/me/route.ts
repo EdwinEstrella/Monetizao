@@ -3,23 +3,26 @@ import insforge from '@/lib/insforge'
 
 export async function GET(request: NextRequest) {
   try {
-    // Obtener sesión actual de InsForge
-    const { data: sessionData, error: sessionError } = await insforge.auth.getCurrentSession()
+    // Obtener usuario actual de InsForge
+    const { data: userData, error: userError } = await insforge.auth.getCurrentUser()
 
-    if (sessionError || !sessionData?.session) {
+    if (userError || !userData?.user) {
       return NextResponse.json(
         { error: 'Token inválido o expirado' },
         { status: 401 }
       )
     }
 
-    const user = sessionData.session.user
+    const user = userData.user
 
-    // Obtener perfil completo del usuario
-    const { data: profile } = await insforge.auth.getProfile(user.id)
-
-    // Verificar si profile tiene error (usuario puede no tener perfil todavía)
-    const profileData = profile?.error ? null : profile
+    // Intentar obtener perfil completo del usuario (puede no existir)
+    let profileData = null
+    try {
+      const { data: profile } = await insforge.auth.getProfile(user.id)
+      profileData = profile?.error ? null : profile
+    } catch (error) {
+      // Usuario no tiene perfil todavía, continuar sin él
+    }
 
     // Obtener configuraciones de API
     const { data: apiConfigs } = await insforge.database
@@ -59,12 +62,12 @@ export async function GET(request: NextRequest) {
       success: true,
       user: {
         id: user.id,
-        name: user.profile?.name || profile?.name || '',
+        name: user.profile?.name || profileData?.name || '',
         email: user.email,
-        role: user.metadata?.role || profile?.role || 'user',
+        role: user.metadata?.role || profileData?.role || 'user',
         is_verified: user.emailVerified,
-        avatar: user.profile?.avatar_url || profile?.avatar_url || null,
-        bio: profile?.bio || null,
+        avatar: user.profile?.avatar_url || profileData?.avatar_url || null,
+        bio: profileData?.bio || null,
         providers: user.providers || [],
         dailyUsageCount,
         lastUsageDate: userUsage?.reset_at || null,
