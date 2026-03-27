@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, memo } from 'react'
 import { cn } from '@/lib/utils'
 
 interface FadeInProps {
@@ -11,7 +11,8 @@ interface FadeInProps {
   direction?: 'up' | 'down' | 'left' | 'right' | 'scale' | 'fade'
 }
 
-export default function FadeIn({
+// Optimize with React.memo to prevent unnecessary re-renders since this is used frequently
+const FadeIn = memo(function FadeIn({
   children,
   className = '',
   delay = 0,
@@ -104,4 +105,6 @@ export default function FadeIn({
       {children}
     </div>
   )
-}
+})
+
+export default FadeIn

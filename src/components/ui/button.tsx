@@ -39,7 +39,8 @@ export interface ButtonProps
   asChild?: boolean
 }
 
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+// Optimize Button with React.memo to prevent unnecessary re-renders
+const Button = React.memo(React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, ...props }, ref) => {
     const Comp = asChild ? Slot : 'button'
     return (
@@ -50,7 +51,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       />
     )
   }
-)
+))
 Button.displayName = 'Button'
 
 export { Button, buttonVariants }

@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Calendar, Clock } from 'lucide-react'
 import Link from 'next/link'
+import { memo } from 'react'
 
 export const revalidate = 3600
 
@@ -19,7 +20,8 @@ const formatDate = (date: Date | string | null | undefined): string => {
   }
 }
 
-const PostCard = ({ post }: { post: any }) => (
+// Optimize PostCard with React.memo to prevent unnecessary re-renders when parent updates
+const PostCard = memo(({ post }: { post: any }) => (
   <Card key={post.slug} className="group hover:shadow-lg transition-shadow">
     <CardHeader>
       <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
@@ -61,7 +63,7 @@ const PostCard = ({ post }: { post: any }) => (
       </Link>
     </CardContent>
   </Card>
-)
+))
 
 export default async function BlogPage() {
   const posts = await getAllArticles()
