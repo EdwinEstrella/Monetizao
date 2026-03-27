@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import insforge from '@/lib/insforge'
+import { createInsForgeServerClient, setAuthCookies } from '@/lib/insforge-server'
 import { DeviceService } from '@/lib/security/device-service'
 import { SecurityMiddleware } from '@/lib/security/middleware'
 
@@ -53,6 +53,9 @@ export async function POST(request: NextRequest) {
         { status: 403 }
       )
     }
+
+    // Crear cliente en modo servidor
+    const insforge = createInsForgeServerClient()
 
     // Registrar usuario con InsForge
     const { data, error } = await insforge.auth.signUp({
@@ -128,8 +131,10 @@ export async function POST(request: NextRequest) {
       // No fallar si no se puede crear la configuración
     }
 
-    // Crear response con cookie
-    const response = NextResponse.json({
+    // Guardar tokens en cookies httpOnly
+    await setAuthCookies(data.accessToken, data.refreshToken)
+
+    return NextResponse.json({
       success: true,
       message: 'Usuario registrado exitosamente',
       user: {
@@ -142,17 +147,6 @@ export async function POST(request: NextRequest) {
         providers: data.user.providers || [],
       },
     })
-
-    // Setear cookie HTTP-only
-    response.cookies.set('auth-token', data.accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60, // 7 días
-      path: '/',
-    })
-
-    return response
   } catch (error) {
     console.error('Register error:', error)
 

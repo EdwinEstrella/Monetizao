@@ -1,10 +1,40 @@
-import { NextRequest, NextResponse } from 'next/server'
-import insforge from '@/lib/insforge'
+import { NextResponse } from 'next/server'
+import { createInsForgeServerClient, getAuthCookies, refreshSession } from '@/lib/insforge-server'
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    // Obtener usuario actual de InsForge
-    const { data: userData, error: userError } = await insforge.auth.getCurrentUser()
+    // Obtener tokens de cookies
+    const { accessToken, refreshToken } = await getAuthCookies()
+
+    if (!accessToken) {
+      return NextResponse.json(
+        { error: 'Token inválido o expirado' },
+        { status: 401 }
+      )
+    }
+
+    // Crear cliente con el token
+    const insforge = createInsForgeServerClient(accessToken)
+
+    // Intentar obtener usuario actual
+    let userData, userError
+    try {
+      const result = await insforge.auth.getCurrentUser()
+      userData = result.data
+      userError = result.error
+    } catch (error) {
+      userError = error
+    }
+
+    // Si el token expiró y tenemos refresh token, intentar refrescar
+    if (userError && refreshToken) {
+      const refreshData = await refreshSession()
+
+      if (refreshData?.user) {
+        userData = { user: refreshData.user }
+        userError = null
+      }
+    }
 
     if (userError || !userData?.user) {
       return NextResponse.json(

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import insforge from '@/lib/insforge'
+import { createInsForgeServerClient, setAuthCookies } from '@/lib/insforge-server'
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,8 +17,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(loginUrl)
     }
 
-    // El SDK de InsForge maneja automáticamente el intercambio del código OAuth
-    // Solo necesitamos verificar si se estableció la sesión
+    // Crear cliente en modo servidor para verificar la sesión OAuth
+    const insforge = createInsForgeServerClient()
+
+    // Verificar si se estableció la sesión después del OAuth
     const { data: userData, error: userError } = await insforge.auth.getCurrentUser()
 
     if (userError || !userData?.user) {
@@ -29,6 +31,13 @@ export async function GET(request: NextRequest) {
     }
 
     const user = userData.user
+
+    // Guardar tokens en cookies httpOnly
+    // InsForge maneja automáticamente el intercambio del código OAuth
+    // y devuelve los tokens en la respuesta de getCurrentUser después del callback
+    if (userData.accessToken) {
+      await setAuthCookies(userData.accessToken, userData.refreshToken)
+    }
 
     // Crear configuración de API por defecto si no existe
     try {
@@ -54,7 +63,6 @@ export async function GET(request: NextRequest) {
     }
 
     // Redirigir al dashboard
-    // El SDK ya guardó la sesión automáticamente
     return NextResponse.redirect(new URL('/dashboard', request.url))
   } catch (error) {
     console.error('OAuth callback error:', error)

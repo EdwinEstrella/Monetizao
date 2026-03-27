@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import insforge from '@/lib/insforge'
+import { createInsForgeServerClient, setAuthCookies } from '@/lib/insforge-server'
 
 const LoginSchema = z.object({
   email: z.string().email(),
@@ -12,21 +12,26 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { email, password } = LoginSchema.parse(body)
 
+    // Crear cliente en modo servidor
+    const insforge = createInsForgeServerClient()
+
     // Autenticar con InsForge
     const { data, error } = await insforge.auth.signInWithPassword({
       email,
       password,
     })
 
-    if (error || !data) {
+    if (error || !data?.accessToken) {
       return NextResponse.json(
         { error: 'Credenciales inválidas' },
         { status: 401 }
       )
     }
 
-    // Crear response con cookie
-    const response = NextResponse.json({
+    // Guardar tokens en cookies httpOnly
+    await setAuthCookies(data.accessToken, data.refreshToken)
+
+    return NextResponse.json({
       success: true,
       message: 'Inicio de sesión exitoso',
       user: {
@@ -39,17 +44,6 @@ export async function POST(request: NextRequest) {
         providers: data.user.providers || [],
       },
     })
-
-    // Guardar access token en cookie HTTP-only
-    response.cookies.set('auth-token', data.accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60, // 7 días
-      path: '/',
-    })
-
-    return response
   } catch (error) {
     console.error('Login error:', error)
 
@@ -79,6 +73,9 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    // Crear cliente en modo servidor
+    const insforge = createInsForgeServerClient()
 
     // Iniciar OAuth con InsForge
     const { data, error } = await insforge.auth.signInWithOAuth({

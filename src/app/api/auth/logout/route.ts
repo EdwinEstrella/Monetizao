@@ -1,8 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server'
-import insforge from '@/lib/insforge'
+import { NextResponse } from 'next/server'
+import { createInsForgeServerClient, clearAuthCookies } from '@/lib/insforge-server'
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
+    // Crear cliente en modo servidor (no necesita token para signOut)
+    const insforge = createInsForgeServerClient()
+
     // Cerrar sesión con InsForge
     const { error } = await insforge.auth.signOut()
 
@@ -11,39 +14,22 @@ export async function POST(request: NextRequest) {
       // Continuar aunque haya error en InsForge, limpiar cookies locales
     }
 
-    // Crear response que elimina la cookie
-    const response = NextResponse.json({
+    // Limpiar cookies de autenticación
+    await clearAuthCookies()
+
+    return NextResponse.json({
       success: true,
       message: 'Sesión cerrada exitosamente',
     })
-
-    // Eliminar la cookie de autenticación
-    response.cookies.set('auth-token', '', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 0, // Eliminar inmediatamente
-      path: '/',
-    })
-
-    return response
   } catch (error) {
     console.error('Logout error:', error)
 
     // Aún limpiar cookies si hay error
-    const response = NextResponse.json({
+    await clearAuthCookies()
+
+    return NextResponse.json({
       success: true,
       message: 'Sesión cerrada',
     })
-
-    response.cookies.set('auth-token', '', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 0,
-      path: '/',
-    })
-
-    return response
   }
 }
