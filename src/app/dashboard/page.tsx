@@ -116,6 +116,13 @@ export default function DashboardPage() {
       const response = await fetch('/api/auth/me')
       if (response.ok) {
         const data = await response.json()
+
+        // Verificar que data.user existe antes de acceder a sus propiedades
+        if (!data.user) {
+          router.push('/auth')
+          return
+        }
+
         setUser(data.user)
 
         // Calcular estadísticas de uso

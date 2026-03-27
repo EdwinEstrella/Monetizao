@@ -7,10 +7,11 @@ export async function GET() {
     const { accessToken, refreshToken } = await getAuthCookies()
 
     if (!accessToken) {
-      return NextResponse.json(
-        { error: 'Token inválido o expirado' },
-        { status: 401 }
-      )
+      // Retornar 200 con user null en lugar de 401 para evitar errores en consola
+      return NextResponse.json({
+        success: false,
+        user: null
+      })
     }
 
     // Crear cliente con el token
@@ -37,10 +38,11 @@ export async function GET() {
     }
 
     if (userError || !userData?.user) {
-      return NextResponse.json(
-        { error: 'Token inválido o expirado' },
-        { status: 401 }
-      )
+      // Retornar 200 con user null en lugar de 401 para evitar errores en consola
+      return NextResponse.json({
+        success: false,
+        user: null
+      })
     }
 
     const user = userData.user

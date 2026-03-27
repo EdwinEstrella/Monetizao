@@ -63,38 +63,48 @@ export function useAuth(): AuthState & AuthActions {
     anonKey: process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY || '',
   }), [])
 
-  // Obtener usuario actual al inicio (best practice de InsForge)
+  // Verificar si estamos en un callback de OAuth
   useEffect(() => {
-    const initializeAuth = async () => {
-      try {
-        const { data, error } = await insforge.auth.getCurrentUser()
+    const urlParams = new URLSearchParams(window.location.search)
+    const hasOauthCode = urlParams.has('insforge_code') ||
+                        urlParams.has('code') ||
+                        window.location.href.includes('insforge_code')
 
-        if (error) {
-          // Si el token expiró, intentar refrescar
-          if (error.statusCode === 401) {
-            // El SDK intentará refrescar automáticamente con httpOnly cookies
+    // Si hay código OAuth, el SDK lo procesará automáticamente
+    // Solo inicializamos si NO es un callback
+    if (!hasOauthCode) {
+      const initializeAuth = async () => {
+        try {
+          // Pequeño delay para evitar race conditions con OAuth
+          await new Promise(resolve => setTimeout(resolve, 100))
+
+          const { data, error } = await insforge.auth.getCurrentUser()
+
+          if (error) {
+            // Silenciosamente marcar como no autenticado sin errores en consola
             setState({
               user: null,
               isLoading: false,
               error: null,
               isAuthenticated: false
             })
+          } else if (data?.user) {
+            setState({
+              user: data.user,
+              isLoading: false,
+              error: null,
+              isAuthenticated: true
+            })
           } else {
             setState({
               user: null,
               isLoading: false,
-              error: error.message,
+              error: null,
               isAuthenticated: false
             })
           }
-        } else if (data?.user) {
-          setState({
-            user: data.user,
-            isLoading: false,
-            error: null,
-            isAuthenticated: true
-          })
-        } else {
+        } catch (err) {
+          // Silenciosamente marcar como no autenticado
           setState({
             user: null,
             isLoading: false,
@@ -102,18 +112,50 @@ export function useAuth(): AuthState & AuthActions {
             isAuthenticated: false
           })
         }
-      } catch (err) {
-        console.error('Auth initialization error:', err)
-        setState({
-          user: null,
-          isLoading: false,
-          error: 'Error de conexión',
-          isAuthenticated: false
-        })
       }
-    }
 
-    initializeAuth()
+      initializeAuth()
+    } else {
+      // Si es callback OAuth, esperar a que el SDK lo procese
+      // El SDK detectará automáticamente insforge_code y guardará la sesión
+      const waitForOauthProcessing = async () => {
+        try {
+          // Esperar a que el SDK procese el código OAuth
+          await new Promise(resolve => setTimeout(resolve, 500))
+
+          // Después del OAuth, intentar obtener el usuario
+          const { data, error } = await insforge.auth.getCurrentUser()
+
+          if (data?.user) {
+            setState({
+              user: data.user,
+              isLoading: false,
+              error: null,
+              isAuthenticated: true
+            })
+
+            // Limpiar la URL para quitar los parámetros de OAuth
+            window.history.replaceState({}, '', window.location.pathname)
+          } else {
+            setState({
+              user: null,
+              isLoading: false,
+              error: error?.message || 'Error en OAuth',
+              isAuthenticated: false
+            })
+          }
+        } catch (err) {
+          setState({
+            user: null,
+            isLoading: false,
+            error: 'Error procesando OAuth',
+            isAuthenticated: false
+          })
+        }
+      }
+
+      waitForOauthProcessing()
+    }
   }, [insforge])
 
   // Iniciar sesión con email y contraseña
