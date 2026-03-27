@@ -114,109 +114,63 @@ export default function DashboardPage() {
   // Use useCallback to prevent recreation on every render
   const fetchUserData = useCallback(async () => {
     try {
-      const response = await fetch('/api/auth/me')
-      if (response.ok) {
-        const data = await response.json()
+      // Primero intentar obtener usuario del SDK del cliente (OAuth)
+      const insforge = createClient({
+        baseUrl: process.env.NEXT_PUBLIC_INSFORGE_BASE_URL || 'https://base.monetizao.com',
+        anonKey: process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY || '',
+      })
 
-        // Verificar que data.user existe antes de acceder a sus propiedades
-        if (!data.user) {
-          // NO redirigir automáticamente - evitar loop infinito
-          setUser(null)
-          return
-        }
+      const { data: authData, error: authError } = await insforge.auth.getCurrentUser()
 
-        setUser(data.user)
+      let combinedUser = null
 
-        // Calcular estadísticas de uso
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
-
-        const isToday = data.user.lastUsageDate && new Date(data.user.lastUsageDate) >= today
-        const dailyUsage = isToday ? data.user.dailyUsageCount : 0
-
-        setUsageStats({
-          dailyUsage,
-          maxDaily: data.user.hasActiveSubscription ? 999 : 5,
-          monthlyUsage: data.user.dailyUsageCount * 30,
-          totalSaved: 0,
-        })
+      if (!authError && authData?.user) {
+        // OAuth: usuario del SDK del cliente
+        combinedUser = authData.user
       } else {
-        // Solo redirigir si es un error 401 explícito
-        if (response.status === 401) {
-          router.push('/auth')
-        } else {
-          setUser(null)
+        // Email/password: intentar obtener del servidor
+        const response = await fetch('/api/auth/me')
+
+        if (response.ok) {
+          const data = await response.json()
+          if (data.user) {
+            combinedUser = data.user
+          }
         }
       }
+
+      if (!combinedUser) {
+        setUser(null)
+        setLoading(false)
+        return
+      }
+
+      setUser(combinedUser)
+
+      // Calcular estadísticas de uso
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+
+      const isToday = combinedUser.lastUsageDate && new Date(combinedUser.lastUsageDate) >= today
+      const dailyUsage = isToday ? combinedUser.dailyUsageCount : 0
+
+      setUsageStats({
+        dailyUsage,
+        maxDaily: combinedUser.hasActiveSubscription ? 999 : 5,
+        monthlyUsage: combinedUser.dailyUsageCount * 30,
+        totalSaved: 0,
+      })
     } catch (error) {
       console.error('Error fetching user data:', error)
       setUser(null)
     } finally {
       setLoading(false)
     }
-  }, [router])
+  }, [])
 
-  // Initialize dashboard - Check for OAuth callback first
+  // Initialize dashboard - OAuth ya fue manejado por useAuth hook
   useEffect(() => {
-    const initializeDashboard = async () => {
-      // Verificar si hay un código OAuth en la URL
-      const urlParams = new URLSearchParams(window.location.search)
-      const oauthCode = urlParams.get('insforge_code')
-
-      if (oauthCode) {
-        // El SDK de InsForge detecta automáticamente el código OAuth y lo procesa
-        // Solo necesitamos esperar a que termine y limpiar la URL
-        const insforge = createClient({
-          baseUrl: process.env.NEXT_PUBLIC_INSFORGE_BASE_URL || 'https://base.monetizao.com',
-          anonKey: process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY || '',
-        })
-
-        try {
-          // Esperar a que el SDK procese el OAuth
-          await new Promise(resolve => setTimeout(resolve, 500))
-
-          // Obtener el usuario (el SDK ya procesó el OAuth)
-          const { data, error } = await insforge.auth.getCurrentUser()
-
-          if (!error && data?.user) {
-            // Limpiar la URL
-            window.history.replaceState({}, '', window.location.pathname)
-
-            toast({
-              title: "¡Autenticación exitosa!",
-              description: "Has iniciado sesión con OAuth correctamente",
-            })
-
-            // Actualizar el usuario localmente
-            setUser(data.user)
-            setLoading(false)
-            return
-          } else {
-            toast({
-              title: "Error en OAuth",
-              description: error?.message || 'Error al procesar OAuth',
-              variant: "destructive"
-            })
-            router.push('/auth')
-            return
-          }
-        } catch (err) {
-          console.error('OAuth processing error:', err)
-          toast({
-            title: "Error en OAuth",
-            description: 'Error de conexión',
-            variant: "destructive"
-          })
-          router.push('/auth')
-          return
-        }
-      }
-
-      // Obtener datos del usuario normalmente
-      fetchUserData()
-    }
-
-    initializeDashboard()
+    fetchUserData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // Solo ejecutar una vez al montar
 

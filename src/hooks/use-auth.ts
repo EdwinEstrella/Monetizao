@@ -75,27 +75,46 @@ export function useAuth(): AuthState & AuthActions {
     isAuthenticated: false
   })
 
-  // Inicializar: verificar si hay sesión usando Server Action
-  // Esto evita crear el SDK cliente durante el render
+  // Inicializar: verificar si hay sesión
+  // Para email/password: usar Server Action (cookies httpOnly)
+  // Para OAuth: usar SDK del cliente (localStorage)
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        // Verificar si el SDK de InsForge detectó un código OAuth en la URL
-        // Si lo detectó, ya procesó el callback y guardó la sesión
+        // Verificar si hay código OAuth en la URL
         const urlParams = new URLSearchParams(window.location.search)
         const hasOauthCode = urlParams.has('insforge_code') || urlParams.has('code')
 
         if (hasOauthCode) {
-          // El SDK ya procesó el OAuth, esperar un momento y limpiar URL
-          await new Promise(resolve => setTimeout(resolve, 100))
+          // Según documentación: el SDK del cliente procesa OAuth automáticamente
+          // Solo esperar y luego obtener el usuario
+          await new Promise(resolve => setTimeout(resolve, 1000))
 
           // Limpiar la URL
           const cleanUrl = window.location.pathname
           window.history.replaceState({}, '', cleanUrl)
+
+          // Usar SDK del cliente para obtener usuario (OAuth ya procesó)
+          const { createClient } = await import('@insforge/sdk')
+          const insforge = createClient({
+            baseUrl: process.env.NEXT_PUBLIC_INSFORGE_BASE_URL || 'https://base.monetizao.com',
+            anonKey: process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY || '',
+          })
+
+          const { data, error } = await insforge.auth.getCurrentUser()
+
+          if (!error && data?.user) {
+            setState({
+              user: data.user,
+              isLoading: false,
+              error: null,
+              isAuthenticated: true
+            })
+            return
+          }
         }
 
-        // Obtener usuario actual usando server action
-        // Esto verifica las cookies httpOnly en el servidor
+        // Si no hay OAuth, usar server action para email/password
         const user = await getCurrentUserAction()
 
         setState({
@@ -193,20 +212,45 @@ export function useAuth(): AuthState & AuthActions {
     return { success: false, error: result.error }
   }, [toast])
 
-  // Iniciar OAuth - Usa Server Action
+  // Iniciar OAuth - Usa SDK del cliente según documentación de InsForge
   const signInWithOAuth = useCallback(async (provider: 'google' | 'github') => {
     setState(prev => ({ ...prev, isLoading: true }))
 
-    const result = await signInWithOAuthAction(provider)
+    try {
+      // Según documentación de InsForge: usar SDK del cliente para OAuth
+      const { createClient } = await import('@insforge/sdk')
 
-    if (result.success && result.url) {
-      // Redirigir al proveedor OAuth
-      window.location.href = result.url
-    } else {
+      const insforge = createClient({
+        baseUrl: process.env.NEXT_PUBLIC_INSFORGE_BASE_URL || 'https://base.monetizao.com',
+        anonKey: process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY || '',
+      })
+
+      // Iniciar OAuth según documentación
+      const { data, error } = await insforge.auth.signInWithOAuth({
+        provider,
+        redirectTo: `${window.location.origin}/dashboard`,
+        skipBrowserRedirect: true,
+      })
+
+      if (error) {
+        setState(prev => ({
+          ...prev,
+          isLoading: false,
+          error: error.message || 'Error al iniciar OAuth'
+        }))
+        return
+      }
+
+      if (data?.url) {
+        // Redirigir al proveedor OAuth
+        window.location.href = data.url
+      }
+    } catch (err) {
+      console.error('OAuth error:', err)
       setState(prev => ({
         ...prev,
         isLoading: false,
-        error: result.error
+        error: 'Error de conexión'
       }))
     }
   }, [])

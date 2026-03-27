@@ -1,10 +1,19 @@
 import { NextResponse } from 'next/server'
 import { createInsForgeServerClient, getAuthCookies } from '@/lib/insforge-server'
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    // Obtener tokens de cookies
-    const { accessToken } = await getAuthCookies()
+    // Intentar obtener token del Authorization header (OAuth según documentación InsForge)
+    const authHeader = request.headers.get('authorization')
+    let accessToken = null
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      accessToken = authHeader.substring(7)
+    } else {
+      // Si no hay header, intentar obtener de cookies (email/password)
+      const { accessToken: cookieToken } = await getAuthCookies()
+      accessToken = cookieToken
+    }
 
     if (!accessToken) {
       // Retornar 200 con user null en lugar de 401 para evitar errores en consola
