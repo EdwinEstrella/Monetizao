@@ -14,6 +14,30 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // Add performance and caching headers
+  const response = NextResponse.next()
+
+  // Security headers
+  response.headers.set('X-DNS-Prefetch-Control', 'on')
+  response.headers.set('X-Frame-Options', 'SAMEORIGIN')
+  response.headers.set('X-Content-Type-Options', 'nosniff')
+  response.headers.set('Referrer-Policy', 'origin-when-cross-origin')
+
+  // Caching headers for static content
+  if (request.nextUrl.pathname.match(/\.(jpg|jpeg|png|gif|ico|svg|webp)$/i)) {
+    response.headers.set('Cache-Control', 'public, max-age=31536000, immutable')
+  }
+
+  // Caching for API responses
+  if (request.nextUrl.pathname.startsWith('/api')) {
+    response.headers.set('Cache-Control', 'no-store, must-revalidate')
+  }
+
+  // Caching for pages
+  if (!request.nextUrl.pathname.startsWith('/api') && !request.nextUrl.pathname.startsWith('/auth')) {
+    response.headers.set('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400')
+  }
+
   // En desarrollo, ser más permisivo
   if (process.env.NODE_ENV === 'development') {
     // Solo aplicar seguridad a endpoints sensibles en desarrollo

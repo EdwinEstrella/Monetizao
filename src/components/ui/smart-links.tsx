@@ -94,8 +94,9 @@ export default function SmartLink({
     return (
       <Link
         href={linkHref}
-        className={`text-blue-600 hover:text-blue-700 transition-colors ${className}`}
+        className={`text-blue-600 hover:text-blue-700 underline underline-offset-4 hover:underline decoration-2 transition-all ${className}`}
         title={`Aprende más sobre ${category}`}
+        aria-label={`Aprende más sobre ${category}: ${children}`}
       >
         {children}
       </Link>
@@ -106,7 +107,8 @@ export default function SmartLink({
     <Link
       href={href || linkHref}
       target={target}
-      className={`text-blue-600 hover:text-blue-700 transition-colors ${className}`}
+      className={`text-blue-600 hover:text-blue-700 underline underline-offset-4 hover:underline decoration-2 transition-all ${className}`}
+      aria-label={children?.toString()}
     >
       {children}
     </Link>
@@ -166,7 +168,8 @@ export function ContextualBacklinks({
           <Link
             key={index}
             href={link.href}
-            className="block text-blue-700 hover:text-blue-800 text-sm transition-colors"
+            className="block text-blue-700 hover:text-blue-800 text-sm underline underline-offset-4 hover:underline decoration-2 transition-all"
+            aria-label={`Leer más: ${link.text}`}
           >
             → {link.text}
           </Link>
@@ -174,7 +177,8 @@ export function ContextualBacklinks({
       </div>
       <Link
         href="/guias"
-        className="inline-block mt-3 text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors"
+        className="inline-block mt-3 text-blue-600 hover:text-blue-700 text-sm font-medium underline underline-offset-4 hover:underline decoration-2 transition-all"
+        aria-label="Ver todas las guías de inteligencia artificial"
       >
         Ver todas las guías de IA →
       </Link>

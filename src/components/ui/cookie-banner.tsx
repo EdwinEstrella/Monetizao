@@ -21,10 +21,10 @@ interface CookieBannerProps {
   onCustomize?: () => void
 }
 
-// Google Analytics Loader
+// Google Analytics Loader - Optimized for better performance
 const loadGoogleAnalytics = () => {
   const GA_ID = process.env.NEXT_PUBLIC_GA_ID
-  
+
   if (!GA_ID) {
     console.log('Google Analytics: ID no configurado en variables de entorno')
     return
@@ -34,27 +34,39 @@ const loadGoogleAnalytics = () => {
     window.gaLoaded = true
     window.dataLayer = window.dataLayer || []
 
-    const script = document.createElement('script')
-    script.async = true
-    script.src = `https://www.googletagmanager.com/gtag/js?id=${GA_ID}`
+    // Use requestIdleCallback for better performance
+    const loadScript = () => {
+      const script = document.createElement('script')
+      script.async = true
+      script.defer = true
+      script.src = `https://www.googletagmanager.com/gtag/js?id=${GA_ID}`
 
-    script.onload = () => {
-      window.gtag = function() { window.dataLayer.push(arguments) }
-      window.gtag('js', new Date())
-      window.gtag('config', GA_ID, {
-        anonymize_ip: true,
-        cookie_domain: 'monetizao.com',
-        page_title: document.title,
-        page_location: window.location.href
-      })
-      console.log('Google Analytics cargado correctamente')
+      script.onload = () => {
+        window.gtag = function() { window.dataLayer.push(arguments) }
+        window.gtag('js', new Date())
+        window.gtag('config', GA_ID, {
+          anonymize_ip: true,
+          cookie_domain: 'none', // Use first-party only
+          page_title: document.title,
+          page_location: window.location.href,
+          cookie_flags: 'SameSite=None;Secure' // Security improvements
+        })
+        console.log('✅ Google Analytics cargado correctamente')
+      }
+
+      script.onerror = () => {
+        console.error('❌ Error al cargar Google Analytics')
+      }
+
+      document.head.appendChild(script)
     }
 
-    script.onerror = () => {
-      console.error('Error al cargar Google Analytics')
+    // Use requestIdleCallback if available, otherwise load immediately
+    if ('requestIdleCallback' in window) {
+      window.requestIdleCallback(loadScript, { timeout: 2000 })
+    } else {
+      loadScript()
     }
-
-    document.head.appendChild(script)
   }
 }
 

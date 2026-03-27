@@ -62,12 +62,23 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.ico" sizes="32x32" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.svg" />
         <meta name="theme-color" content="#3b82f6" />
+
+        {/* Performance optimizations - Preload critical resources */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
+        <link rel="dns-prefetch" href="https://pagead2.googlesyndication.com" />
+
+        {/* Preload critical CSS */}
+        <link rel="preload" href="/_next/static/css/app/layout.css" as="style" />
       </head>
+      {/* Optimize AdSense loading with defer and proper strategy */}
       <Script
+        id="adsense-loader"
         async
         src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5431264679524719"
         crossOrigin="anonymous"
-        strategy="afterInteractive"
+        strategy="lazyOnload"
       />
       <body className={inter.className}>
         <div className="min-h-screen flex flex-col">
