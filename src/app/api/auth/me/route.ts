@@ -3,31 +3,36 @@ import insforge from '@/lib/insforge'
 
 export async function GET(request: NextRequest) {
   try {
-    // Obtener usuario actual de InsForge
-    const { data: userData, error: userError } = await insforge.auth.getCurrentUser()
+    // Obtener sesión actual de InsForge
+    const { data: sessionData, error: sessionError } = await insforge.auth.getCurrentSession()
 
-    if (userError || !userData?.user) {
+    if (sessionError || !sessionData?.session) {
       return NextResponse.json(
         { error: 'Token inválido o expirado' },
         { status: 401 }
       )
     }
 
+    const user = sessionData.session.user
+
     // Obtener perfil completo del usuario
-    const { data: profile } = await insforge.auth.getProfile(userData.user.id)
+    const { data: profile } = await insforge.auth.getProfile(user.id)
+
+    // Verificar si profile tiene error (usuario puede no tener perfil todavía)
+    const profileData = profile?.error ? null : profile
 
     // Obtener configuraciones de API
     const { data: apiConfigs } = await insforge.database
       .from('api_configs')
       .select('*')
-      .eq('user_id', userData.user.id)
+      .eq('user_id', user.id)
       .maybeSingle()
 
     // Obtener suscripciones activas
     const { data: subscriptions } = await insforge.database
       .from('subscriptions')
       .select('*')
-      .eq('user_id', userData.user.id)
+      .eq('user_id', user.id)
       .eq('status', 'active')
       .gt('end_date', new Date().toISOString())
       .order('end_date', { ascending: false })
@@ -37,7 +42,7 @@ export async function GET(request: NextRequest) {
     const { data: userUsage } = await insforge.database
       .from('user_usage')
       .select('*')
-      .eq('user_id', userData.user.id)
+      .eq('user_id', user.id)
       .maybeSingle()
 
     // Verificar si el usuario ha excedido su límite diario (plan gratuito)
@@ -53,17 +58,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       user: {
-        id: userData.user.id,
-        name: userData.user.profile?.name || profile?.name || '',
-        email: userData.user.email,
-        role: userData.user.metadata?.role || profile?.role || 'user',
-        is_verified: userData.user.emailVerified,
-        avatar: userData.user.profile?.avatar_url || profile?.avatar_url || null,
+        id: user.id,
+        name: user.profile?.name || profile?.name || '',
+        email: user.email,
+        role: user.metadata?.role || profile?.role || 'user',
+        is_verified: user.emailVerified,
+        avatar: user.profile?.avatar_url || profile?.avatar_url || null,
         bio: profile?.bio || null,
-        providers: userData.user.providers || [],
+        providers: user.providers || [],
         dailyUsageCount,
         lastUsageDate: userUsage?.reset_at || null,
-        created_at: userData.user.createdAt,
+        created_at: user.createdAt,
         apiConfig: apiConfigs || null,
         subscription: subscriptions?.[0] || null,
         hasActiveSubscription,

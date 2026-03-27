@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
 
     // Crear configuración de API por defecto
     try {
-      await insforge.database.from('api_configs').insert({
+      await insforge.database.from('api_configs').insert([{
         user_id: data.user.id,
         provider: 'deepseek',
         api_key: 'sk-d9da8c580ae540e2b398bcdb97f69224',
@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
         is_active: true,
         max_tokens: 4000,
         temperature: 0.7,
-      })
+      }])
     } catch (error) {
       console.log('Error creating default API config:', error)
       // No fallar si no se puede crear la configuración
